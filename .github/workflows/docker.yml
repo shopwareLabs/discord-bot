@@ -35,8 +35,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           push: true
           tags: ghcr.io/shopwarelabs/discord-bot:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trigger Deployment
+        run: curl -X POST ${{ secrets.DEPLOY_URL}}
