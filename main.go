@@ -51,7 +51,10 @@ func main() {
 		slog.Error("Failed to create Discord handler", "error", err)
 	}
 
-	oauthHandler := handlers.NewOAuthHandler(config, store, discordHandler)
+	oauthHandler, err := handlers.NewOAuthHandler(config, store, discordHandler)
+	if err != nil {
+		slog.Error("Failed to create OAuth handler", "error", err)
+	}
 	webHandler := handlers.NewWebHandler(discordHandler)
 
 	// Start Discord bot

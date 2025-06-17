@@ -50,8 +50,7 @@ func (h *DiscordHandler) Start() error {
 		return fmt.Errorf("cannot create slash command: %v", err)
 	}
 
-	slog.Info("Discord bot started",
-		"guild_id", h.config.DiscordGuildID)
+	slog.Info("Discord bot started", "guild_id", h.config.DiscordGuildID)
 	return nil
 }
 
@@ -114,6 +113,7 @@ func (h *DiscordHandler) VerifyUserDirectly(discordID, email string) error {
 	}
 
 	// Add role to user
+	slog.Info("Assigning role to user", "discord_id", discordID, "guild_id", h.config.DiscordGuildID, "role_id", h.config.DiscordRoleID)
 	err := h.session.GuildMemberRoleAdd(h.config.DiscordGuildID, discordID, h.config.DiscordRoleID)
 	if err != nil {
 		return fmt.Errorf("failed to add role: %v", err)

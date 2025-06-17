@@ -1,16 +1,14 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io"
-	"log"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"discord-sso-role/models"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
@@ -21,9 +19,18 @@ type OAuthHandler struct {
 	store          *models.VerificationStore
 	oauthConfig    *oauth2.Config
 	discordHandler *DiscordHandler
+	verifier       *oidc.IDTokenVerifier
 }
 
-func NewOAuthHandler(config *models.Config, store *models.VerificationStore, discordHandler *DiscordHandler) *OAuthHandler {
+func NewOAuthHandler(config *models.Config, store *models.VerificationStore, discordHandler *DiscordHandler) (*OAuthHandler, error) {
+	// Create OIDC provider
+	ctx := context.Background()
+	issuerURL := fmt.Sprintf("https://login.microsoftonline.com/%s/v2.0", config.MicrosoftTenantID)
+	provider, err := oidc.NewProvider(ctx, issuerURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+	}
+
 	oauthConfig := &oauth2.Config{
 		ClientID:     config.MicrosoftClientID,
 		ClientSecret: config.MicrosoftClientSecret,
@@ -32,12 +39,17 @@ func NewOAuthHandler(config *models.Config, store *models.VerificationStore, dis
 		Endpoint:     microsoft.AzureADEndpoint(config.MicrosoftTenantID),
 	}
 
+	verifier := provider.Verifier(&oidc.Config{
+		ClientID: config.MicrosoftClientID,
+	})
+
 	return &OAuthHandler{
 		config:         config,
 		store:          store,
 		oauthConfig:    oauthConfig,
 		discordHandler: discordHandler,
-	}
+		verifier:       verifier,
+	}, nil
 }
 
 // StartAuth initiates the OAuth flow
@@ -75,44 +87,67 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Get user info using the OAuth2 client
-	client := h.oauthConfig.Client(ctx, token)
-	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
-	if err != nil {
-		slog.Error("Failed to get user info", "error", err)
+	// Extract the ID token
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		slog.Error("No ID token found in response")
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"error": "Failed to get user information",
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	respContent, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Error("Failed to read user info response", "error", err)
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"error": "Failed to read user information",
+			"error": "No ID token found",
 		})
 		return
 	}
 
-	log.Println(string(respContent))
-
-	var userInfo struct {
-		Email string `json:"email"`
-		Name  string `json:"displayName"`
+	// Parse and verify the ID token
+	if h.verifier == nil {
+		slog.Error("OIDC verifier not initialized")
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Authentication configuration error",
+		})
+		return
 	}
 
-	if err := json.NewDecoder(bytes.NewReader(respContent)).Decode(&userInfo); err != nil {
-		slog.Error("Failed to decode user info", "error", err)
+	idToken, err := h.verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		slog.Error("Failed to verify ID token", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"error": "Failed to parse user information",
+			"error": "Failed to verify ID token",
+		})
+		return
+	}
+
+	// Extract claims
+	var claims struct {
+		Email             string `json:"email"`
+		PreferredUsername string `json:"preferred_username"`
+		UPN               string `json:"upn"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		slog.Error("Failed to parse ID token claims", "error", err)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Failed to parse ID token claims",
+		})
+		return
+	}
+
+	// Get email from claims
+	email := claims.Email
+	if email == "" {
+		email = claims.PreferredUsername
+		if email == "" {
+			email = claims.UPN
+		}
+	}
+
+	if email == "" {
+		slog.Error("No email found in ID token", "claims", claims)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "No email found in authentication response",
 		})
 		return
 	}
 
 	// Directly verify the user and assign the role
-	err = h.discordHandler.VerifyUserDirectly(state, userInfo.Email)
+	err = h.discordHandler.VerifyUserDirectly(state, email)
 	if err != nil {
 		slog.Error("Failed to verify user", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
@@ -123,7 +158,8 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	// Show success page
 	c.HTML(http.StatusOK, "success.html", gin.H{
-		"email":   userInfo.Email,
+		"email":   email,
 		"message": "Your employee status has been verified! Check Discord for confirmation.",
 	})
 }
+
