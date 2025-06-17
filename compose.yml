@@ -31,7 +31,6 @@ services:
     #   # Server
     #   - PORT=${PORT:-8080}
     #   - BASE_URL=${BASE_URL:-http://localhost:8080}
-    #   - VERIFICATION_TTL=${VERIFICATION_TTL:-15}
       
     #   # Database
     #   - DATABASE_PATH=${DATABASE_PATH:-/app/data/discord-sso.db}

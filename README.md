@@ -76,7 +76,6 @@ DISCORD_ROLE_ID=your-employee-role-id
 # Server Configuration
 PORT=8080
 BASE_URL=http://localhost:8080
-VERIFICATION_TTL=15
 ```
 
 ## Running the Application
@@ -136,7 +135,6 @@ go run main.go
 | DISCORD_ROLE_ID | Role ID to assign | Required |
 | PORT | Server port | 8080 |
 | BASE_URL | Application base URL | http://localhost:8080 |
-| VERIFICATION_TTL | Code expiration in minutes | 15 |
 | GIN_MODE | Gin framework mode | debug |
 
 ## Security Considerations

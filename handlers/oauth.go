@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,6 +11,7 @@ import (
 	"discord-sso-role/models"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
@@ -54,20 +57,49 @@ func NewOAuthHandler(config *models.Config, store *models.VerificationStore, dis
 
 // StartAuth initiates the OAuth flow
 func (h *OAuthHandler) StartAuth(c *gin.Context) {
-	state := c.Query("state") // Discord ID passed as state
-	if state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing state parameter"})
+	discordID := c.Query("state") // Discord ID passed as state
+	if discordID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing Discord ID"})
 		return
 	}
 
+	// Generate a secure random state parameter
+	state, err := generateSecureState()
+	if err != nil {
+		slog.Error("Failed to generate state", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate state"})
+		return
+	}
+
+	// Store Discord ID in session with the state as key
+	session := sessions.Default(c)
+	session.Set("discord_id_"+state, discordID)
+	session.Set("oauth_state", state)
+	if err := session.Save(); err != nil {
+		slog.Error("Failed to save session", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Session error"})
+		return
+	}
+
+	// Redirect to OAuth provider with secure state
 	authURL := h.oauthConfig.AuthCodeURL(state)
 	c.Redirect(http.StatusTemporaryRedirect, authURL)
+}
+
+// generateSecureState generates a cryptographically secure random state parameter
+func generateSecureState() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 // Callback handles the OAuth callback
 func (h *OAuthHandler) Callback(c *gin.Context) {
 	code := c.Query("code")
-	state := c.Query("state") // Discord ID
+	state := c.Query("state")
 
 	if code == "" {
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{
@@ -75,6 +107,42 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		})
 		return
 	}
+
+	if state == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Missing state parameter",
+		})
+		return
+	}
+
+	// Validate state and get Discord ID from session
+	session := sessions.Default(c)
+	sessionState := session.Get("oauth_state")
+	if sessionState == nil || sessionState.(string) != state {
+		slog.Error("Invalid state parameter", "received", state, "expected", sessionState)
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Invalid state parameter",
+		})
+		return
+	}
+
+	// Get Discord ID from session
+	discordIDKey := "discord_id_" + state
+	discordIDValue := session.Get(discordIDKey)
+	if discordIDValue == nil {
+		slog.Error("Discord ID not found in session", "state", state)
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Session expired or invalid",
+		})
+		return
+	}
+
+	discordID := discordIDValue.(string)
+
+	// Clean up session
+	session.Delete("oauth_state")
+	session.Delete(discordIDKey)
+	session.Save()
 
 	// Exchange code for token
 	ctx := context.Background()
@@ -157,7 +225,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	// Directly verify the user and assign the role
-	err = h.discordHandler.VerifyUserDirectly(state, claims.Sub, email)
+	err = h.discordHandler.VerifyUserDirectly(discordID, claims.Sub, email)
 	if err != nil {
 		slog.Error("Failed to verify user", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{

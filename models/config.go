@@ -3,7 +3,6 @@ package models
 import (
 	"fmt"
 	"os"
-	"strconv"
 )
 
 // Config holds the application configuration
@@ -20,9 +19,9 @@ type Config struct {
 	DiscordRoleID  string
 
 	// Server
-	Port            string
-	BaseURL         string
-	VerificationTTL int // in minutes
+	Port          string
+	BaseURL       string
+	SessionSecret string
 
 	// Database
 	DatabasePath string
@@ -30,8 +29,6 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
-	ttl, _ := strconv.Atoi(getEnv("VERIFICATION_TTL", "15"))
-
 	return &Config{
 		MicrosoftClientID:     getEnv("MICROSOFT_CLIENT_ID", ""),
 		MicrosoftClientSecret: getEnv("MICROSOFT_CLIENT_SECRET", ""),
@@ -42,7 +39,7 @@ func LoadConfig() *Config {
 		DiscordRoleID:         getEnv("DISCORD_ROLE_ID", ""),
 		Port:                  getEnv("PORT", "8080"),
 		BaseURL:               getEnv("BASE_URL", "http://localhost:8080"),
-		VerificationTTL:       ttl,
+		SessionSecret:         getEnv("SESSION_SECRET", "change-me-in-production"),
 		DatabasePath:          getEnv("DATABASE_PATH", "./data/discord-sso.db"),
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"discord-sso-role/handlers"
 	"discord-sso-role/models"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -65,6 +67,18 @@ func main() {
 
 	// Setup Gin router
 	router := gin.Default()
+	
+	// Setup session store
+	sessionStore := cookie.NewStore([]byte(config.SessionSecret))
+	sessionStore.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   3600, // 1 hour
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
+	router.Use(sessions.Sessions("discord-session", sessionStore))
+	
 	router.LoadHTMLGlob("templates/*")
 
 	// Routes
