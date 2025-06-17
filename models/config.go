@@ -27,7 +27,6 @@ type Config struct {
 	DatabasePath string
 }
 
-// LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	return &Config{
 		MicrosoftClientID:     getEnv("MICROSOFT_CLIENT_ID", ""),

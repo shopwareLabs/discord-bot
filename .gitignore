@@ -34,7 +34,7 @@ vendor/
 Thumbs.db
 
 # Application specific
-/discord-sso-role
+/discord-bot
 /main
 /tmp/
 /logs/

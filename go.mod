@@ -1,4 +1,4 @@
-module discord-sso-role
+module github.com/shopwarelabs/discord-bot
 
 go 1.23.0
 

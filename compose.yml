@@ -16,27 +16,26 @@ services:
       - "traefik.http.services.discordbot.loadbalancer.server.port=8080"
       - "traefik.http.routers.discordbot.service=discordbot"
       - "traefik.http.routers.discordbot.tls.certresolver=default"
-    # environment:
-    #   # Microsoft OAuth
-    #   - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
-    #   - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
-    #   - MICROSOFT_REDIRECT_URL=${MICROSOFT_REDIRECT_URL:-http://localhost:8080/auth/callback}
-    #   - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
+    environment:
+      # Microsoft OAuth
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
       
-    #   # Discord
-    #   - DISCORD_TOKEN=${DISCORD_TOKEN}
-    #   - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
-    #   - DISCORD_ROLE_ID=${DISCORD_ROLE_ID}
+      # Discord
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - DISCORD_ROLE_ID=${DISCORD_ROLE_ID}
       
-    #   # Server
-    #   - PORT=${PORT:-8080}
-    #   - BASE_URL=${BASE_URL:-http://localhost:8080}
+      # Server
+      - PORT=${PORT:-8080}
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
       
-    #   # Database
-    #   - DATABASE_PATH=${DATABASE_PATH:-/app/data/discord-sso.db}
+      # Database
+      - DATABASE_PATH=${DATABASE_PATH:-/app/data/discord-sso.db}
       
-    #   # Gin mode
-    #   - GIN_MODE=${GIN_MODE:-debug}
+      # Gin mode
+      - GIN_MODE=${GIN_MODE:-debug}
     
     restart: unless-stopped
     

@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"discord-sso-role/models"
+	"github.com/shopwarelabs/discord-bot/models"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
@@ -26,7 +26,6 @@ type OAuthHandler struct {
 }
 
 func NewOAuthHandler(config *models.Config, store *models.VerificationStore, discordHandler *DiscordHandler) (*OAuthHandler, error) {
-	// Create OIDC provider
 	ctx := context.Background()
 	issuerURL := fmt.Sprintf("https://login.microsoftonline.com/%s/v2.0", config.MicrosoftTenantID)
 	provider, err := oidc.NewProvider(ctx, issuerURL)
@@ -55,15 +54,13 @@ func NewOAuthHandler(config *models.Config, store *models.VerificationStore, dis
 	}, nil
 }
 
-// StartAuth initiates the OAuth flow
 func (h *OAuthHandler) StartAuth(c *gin.Context) {
-	discordID := c.Query("state") // Discord ID passed as state
+	discordID := c.Query("state")
 	if discordID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing Discord ID"})
 		return
 	}
 
-	// Generate a secure random state parameter
 	state, err := generateSecureState()
 	if err != nil {
 		slog.Error("Failed to generate state", "error", err)
@@ -71,7 +68,6 @@ func (h *OAuthHandler) StartAuth(c *gin.Context) {
 		return
 	}
 
-	// Store Discord ID in session with the state as key
 	session := sessions.Default(c)
 	session.Set("discord_id_"+state, discordID)
 	session.Set("oauth_state", state)
@@ -115,7 +111,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Validate state and get Discord ID from session
 	session := sessions.Default(c)
 	sessionState := session.Get("oauth_state")
 	if sessionState == nil || sessionState.(string) != state {
@@ -126,7 +121,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Get Discord ID from session
 	discordIDKey := "discord_id_" + state
 	discordIDValue := session.Get(discordIDKey)
 	if discordIDValue == nil {
@@ -139,12 +133,16 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	discordID := discordIDValue.(string)
 
-	// Clean up session
 	session.Delete("oauth_state")
 	session.Delete(discordIDKey)
-	session.Save()
+	if err := session.Save(); err != nil {
+		slog.Error("Failed to save session", "error", err)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Failed to save session",
+		})
+		return
+	}
 
-	// Exchange code for token
 	ctx := context.Background()
 	token, err := h.oauthConfig.Exchange(ctx, code)
 	if err != nil {
@@ -155,7 +153,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Extract the ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		slog.Error("No ID token found in response")
@@ -165,7 +162,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Parse and verify the ID token
 	if h.verifier == nil {
 		slog.Error("OIDC verifier not initialized")
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
@@ -183,7 +179,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Extract claims
 	var claims struct {
 		Sub               string `json:"sub"`
 		Email             string `json:"email"`
@@ -198,7 +193,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Ensure we have the Azure user ID
 	if claims.Sub == "" {
 		slog.Error("No subject (user ID) found in ID token", "claims", claims)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
@@ -207,7 +201,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Get email for display purposes (but use Sub for database)
 	email := claims.Email
 	if email == "" {
 		email = claims.PreferredUsername
@@ -224,7 +217,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Directly verify the user and assign the role
 	err = h.discordHandler.VerifyUserDirectly(discordID, claims.Sub, email)
 	if err != nil {
 		slog.Error("Failed to verify user", "error", err)
@@ -234,10 +226,8 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Show success page
 	c.HTML(http.StatusOK, "success.html", gin.H{
 		"email":   email,
 		"message": "Your employee status has been verified! Check Discord for confirmation.",
 	})
 }
-

@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"discord-sso-role/handlers"
-	"discord-sso-role/models"
+	"github.com/shopwarelabs/discord-bot/handlers"
+	"github.com/shopwarelabs/discord-bot/models"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -42,7 +42,9 @@ func main() {
 	if err != nil {
 		slog.Error("Failed to initialize database", "error", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// Create verification store
 	store := models.NewVerificationStore(db)
@@ -57,17 +59,18 @@ func main() {
 	if err != nil {
 		slog.Error("Failed to create OAuth handler", "error", err)
 	}
-	webHandler := handlers.NewWebHandler(discordHandler)
 
 	// Start Discord bot
 	if err := discordHandler.Start(); err != nil {
 		slog.Error("Failed to start Discord bot", "error", err)
 	}
-	defer discordHandler.Stop()
+	defer func() {
+		_ = discordHandler.Stop()
+	}()
 
 	// Setup Gin router
 	router := gin.Default()
-	
+
 	// Setup session store
 	sessionStore := cookie.NewStore([]byte(config.SessionSecret))
 	sessionStore.Options(sessions.Options{
@@ -78,11 +81,9 @@ func main() {
 		SameSite: http.SameSiteLaxMode,
 	})
 	router.Use(sessions.Sessions("discord-session", sessionStore))
-	
+
 	router.LoadHTMLGlob("templates/*")
 
-	// Routes
-	router.GET("/", webHandler.Home)
 	router.GET("/employee/start", oauthHandler.StartAuth)
 	router.GET("/employee/callback", oauthHandler.Callback)
 
