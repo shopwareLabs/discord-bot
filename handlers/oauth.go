@@ -1,12 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"discord-sso-role/models"
@@ -14,17 +11,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/microsoft"
 )
 
 type OAuthHandler struct {
-	config *models.Config
-	store  *models.VerificationStore
+	config      *models.Config
+	store       *models.VerificationStore
+	oauthConfig *oauth2.Config
 }
 
 func NewOAuthHandler(config *models.Config, store *models.VerificationStore) *OAuthHandler {
+	oauthConfig := &oauth2.Config{
+		ClientID:     config.MicrosoftClientID,
+		ClientSecret: config.MicrosoftClientSecret,
+		RedirectURL:  config.MicrosoftRedirectURL,
+		Scopes:       []string{"openid", "email", "profile", "User.Read"},
+		Endpoint:     microsoft.AzureADEndpoint(config.MicrosoftTenantID),
+	}
+
 	return &OAuthHandler{
-		config: config,
-		store:  store,
+		config:      config,
+		store:       store,
+		oauthConfig: oauthConfig,
 	}
 }
 
@@ -36,20 +45,7 @@ func (h *OAuthHandler) StartAuth(c *gin.Context) {
 		return
 	}
 
-	authURL := fmt.Sprintf(
-		"https://login.microsoftonline.com/%s/oauth2/v2.0/authorize?"+
-			"client_id=%s&"+
-			"response_type=code&"+
-			"redirect_uri=%s&"+
-			"response_mode=query&"+
-			"scope=openid%%20email%%20profile&"+
-			"state=%s",
-		h.config.MicrosoftTenantID,
-		h.config.MicrosoftClientID,
-		h.config.MicrosoftRedirectURL,
-		state,
-	)
-
+	authURL := h.oauthConfig.AuthCodeURL(state)
 	c.Redirect(http.StatusTemporaryRedirect, authURL)
 }
 
@@ -66,7 +62,8 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	// Exchange code for token
-	token, err := h.exchangeCodeForToken(code)
+	ctx := context.Background()
+	token, err := h.oauthConfig.Exchange(ctx, code)
 	if err != nil {
 		utils.Logger.Printf("Failed to exchange code for token: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
@@ -75,12 +72,27 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Get user info
-	userInfo, err := h.getUserInfo(token.AccessToken)
+	// Get user info using the OAuth2 client
+	client := h.oauthConfig.Client(ctx, token)
+	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
 	if err != nil {
 		utils.Logger.Printf("Failed to get user info: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to get user information",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	var userInfo struct {
+		Email string `json:"mail"`
+		Name  string `json:"displayName"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		utils.Logger.Printf("Failed to decode user info: %v", err)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Failed to parse user information",
 		})
 		return
 	}
@@ -107,89 +119,4 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		"code":  verificationCode.Code,
 		"email": userInfo.Email,
 	})
-}
-
-type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-func (h *OAuthHandler) exchangeCodeForToken(code string) (*tokenResponse, error) {
-	tokenURL := fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", h.config.MicrosoftTenantID)
-	
-	data := url.Values{}
-	data.Set("client_id", h.config.MicrosoftClientID)
-	data.Set("client_secret", h.config.MicrosoftClientSecret)
-	data.Set("code", code)
-	data.Set("redirect_uri", h.config.MicrosoftRedirectURL)
-	data.Set("grant_type", "authorization_code")
-
-	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
-	}
-
-	var tokenResp tokenResponse
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return nil, err
-	}
-
-	return &tokenResp, nil
-}
-
-type userInfo struct {
-	Email string `json:"mail"`
-	Name  string `json:"displayName"`
-}
-
-func (h *OAuthHandler) getUserInfo(accessToken string) (*userInfo, error) {
-	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get user info: %s", string(body))
-	}
-
-	var info userInfo
-	if err := json.Unmarshal(body, &info); err != nil {
-		return nil, err
-	}
-
-	return &info, nil
 }

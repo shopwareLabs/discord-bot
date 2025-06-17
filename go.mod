@@ -1,12 +1,15 @@
 module discord-sso-role
 
-go 1.21
+go 1.23.0
+
+toolchain go1.24.4
 
 require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.5.0
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/oauth2 v0.30.0
 	modernc.org/sqlite v1.28.0
 )
 
