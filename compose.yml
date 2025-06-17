@@ -1,0 +1,42 @@
+services:
+  discord-sso:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - discord-sso-data:/app/data
+    environment:
+      # Microsoft OAuth
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_REDIRECT_URL=${MICROSOFT_REDIRECT_URL:-http://localhost:8080/auth/callback}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
+      
+      # Discord
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - DISCORD_ROLE_ID=${DISCORD_ROLE_ID}
+      
+      # Server
+      - PORT=${PORT:-8080}
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
+      - VERIFICATION_TTL=${VERIFICATION_TTL:-15}
+      
+      # Database
+      - DATABASE_PATH=${DATABASE_PATH:-/app/data/discord-sso.db}
+      
+      # Gin mode
+      - GIN_MODE=${GIN_MODE:-debug}
+    
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  discord-sso-data:

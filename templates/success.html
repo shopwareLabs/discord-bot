@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification Successful</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .success-icon::before {
+            content: "✓";
+            color: white;
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 1rem;
+        }
+        .code-box {
+            background-color: #f8f9fa;
+            border: 2px dashed #5865F2;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+        }
+        .code {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #5865F2;
+            letter-spacing: 0.2rem;
+            font-family: monospace;
+        }
+        .email {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #004085;
+        }
+        .instructions ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+        .instructions li {
+            margin-bottom: 0.5rem;
+            color: #004085;
+        }
+        button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #4752C4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon"></div>
+        <h1>Authentication Successful!</h1>
+        <p class="email">Authenticated as: <strong>{{.email}}</strong></p>
+        
+        <div class="code-box">
+            <p style="margin: 0 0 0.5rem 0; color: #666;">Your verification code is:</p>
+            <div class="code" id="verificationCode">{{.code}}</div>
+            <button onclick="copyCode()">Copy Code</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>Next Steps:</h3>
+            <ol>
+                <li>Copy the verification code above</li>
+                <li>Go to the verification page: <a href="/" target="_blank">Open Verification Page</a></li>
+                <li>Enter the code to complete verification</li>
+                <li>Check Discord for confirmation</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function copyCode() {
+            const code = document.getElementById('verificationCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
