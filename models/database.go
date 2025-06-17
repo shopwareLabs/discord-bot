@@ -50,6 +50,7 @@ func (d *Database) migrate() error {
 	CREATE TABLE IF NOT EXISTS users (
 		user_id INTEGER PRIMARY KEY AUTOINCREMENT,
 		discord_id TEXT UNIQUE NOT NULL,
+		azure_user_id TEXT UNIQUE NOT NULL,
 		email TEXT NOT NULL,
 		name TEXT NOT NULL,
 		verified_at DATETIME NOT NULL,
@@ -69,8 +70,12 @@ func (d *Database) migrate() error {
 	);
 	`
 
+	// Add azure_user_id column if it doesn't exist (for existing databases)
+	addAzureUserIDColumn := `ALTER TABLE users ADD COLUMN azure_user_id TEXT;`
+	
 	// Create indexes
 	indexDiscordID := `CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);`
+	indexAzureUserID := `CREATE INDEX IF NOT EXISTS idx_users_azure_user_id ON users(azure_user_id);`
 	indexVerificationCode := `CREATE INDEX IF NOT EXISTS idx_verifications_code ON verifications(code);`
 	indexVerificationDiscordID := `CREATE INDEX IF NOT EXISTS idx_verifications_discord_id ON verifications(discord_id);`
 	indexVerificationExpires := `CREATE INDEX IF NOT EXISTS idx_verifications_expires_at ON verifications(expires_at);`
@@ -79,9 +84,20 @@ func (d *Database) migrate() error {
 		usersTable,
 		verificationsTable,
 		indexDiscordID,
+		indexAzureUserID,
 		indexVerificationCode,
 		indexVerificationDiscordID,
 		indexVerificationExpires,
+	}
+
+	// Try to add the azure_user_id column for existing databases (will fail silently if column exists)
+	migrationQueries := []string{
+		addAzureUserIDColumn,
+	}
+
+	// Execute migration queries (may fail silently for existing columns)
+	for _, query := range migrationQueries {
+		d.db.Exec(query) // Ignore errors for existing columns
 	}
 
 	for _, query := range queries {

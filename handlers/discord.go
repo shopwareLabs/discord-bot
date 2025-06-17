@@ -100,20 +100,20 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 	}
 }
 
-// VerifyUserDirectly verifies a user directly with email and assigns the role
-func (h *DiscordHandler) VerifyUserDirectly(discordID, email string) error {
+// VerifyUserDirectly verifies a user directly with Azure ID and email and assigns the role
+func (h *DiscordHandler) VerifyUserDirectly(discordID, azureUserID, email string) error {
 	// Check if email is from allowed domain
 	if !strings.HasSuffix(email, "@shopware.com") {
 		return fmt.Errorf("email domain not allowed")
 	}
 
-	// Check if user is already verified
-	if h.store.IsUserVerified(discordID) {
+	// Check if user is already verified by Azure ID
+	if h.store.IsUserVerifiedByAzureID(azureUserID) {
 		return fmt.Errorf("user is already verified")
 	}
 
 	// Add role to user
-	slog.Info("Assigning role to user", "discord_id", discordID, "guild_id", h.config.DiscordGuildID, "role_id", h.config.DiscordRoleID)
+	slog.Info("Assigning role to user", "discord_id", discordID, "azure_id", azureUserID, "guild_id", h.config.DiscordGuildID, "role_id", h.config.DiscordRoleID)
 	err := h.session.GuildMemberRoleAdd(h.config.DiscordGuildID, discordID, h.config.DiscordRoleID)
 	if err != nil {
 		return fmt.Errorf("failed to add role: %v", err)
@@ -129,8 +129,8 @@ func (h *DiscordHandler) VerifyUserDirectly(discordID, email string) error {
 		userName = user.Username
 	}
 
-	// Create user record in database
-	if err := h.store.CreateUser(discordID, email, userName); err != nil {
+	// Create user record in database using Azure ID as primary identifier
+	if err := h.store.CreateUserWithAzureID(discordID, azureUserID, email, userName); err != nil {
 		slog.Error("Failed to create user record", "error", err)
 		// Don't return error here as the role was already assigned
 	}
@@ -141,7 +141,7 @@ func (h *DiscordHandler) VerifyUserDirectly(discordID, email string) error {
 		_, _ = h.session.ChannelMessageSend(channel.ID, fmt.Sprintf("Congratulations! Your employee status has been verified. Email: %s", email))
 	}
 
-	slog.Info("User verified", "discord_id", discordID, "email", email)
+	slog.Info("User verified", "discord_id", discordID, "azure_id", azureUserID, "email", email)
 	return nil
 }
 

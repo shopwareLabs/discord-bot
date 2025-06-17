@@ -117,6 +117,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	// Extract claims
 	var claims struct {
+		Sub               string `json:"sub"`
 		Email             string `json:"email"`
 		PreferredUsername string `json:"preferred_username"`
 		UPN               string `json:"upn"`
@@ -129,7 +130,16 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Get email from claims
+	// Ensure we have the Azure user ID
+	if claims.Sub == "" {
+		slog.Error("No subject (user ID) found in ID token", "claims", claims)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Invalid authentication response",
+		})
+		return
+	}
+
+	// Get email for display purposes (but use Sub for database)
 	email := claims.Email
 	if email == "" {
 		email = claims.PreferredUsername
@@ -147,7 +157,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	// Directly verify the user and assign the role
-	err = h.discordHandler.VerifyUserDirectly(state, email)
+	err = h.discordHandler.VerifyUserDirectly(state, claims.Sub, email)
 	if err != nil {
 		slog.Error("Failed to verify user", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{

@@ -17,12 +17,13 @@ type VerificationCode struct {
 
 // User represents a verified user
 type User struct {
-	UserID     int
-	DiscordID  string
-	Email      string
-	Name       string
-	VerifiedAt time.Time
-	CreatedAt  time.Time
+	UserID      int
+	DiscordID   string
+	AzureUserID string
+	Email       string
+	Name        string
+	VerifiedAt  time.Time
+	CreatedAt   time.Time
 }
 
 // VerificationStore handles verification codes and users using SQLite
@@ -114,7 +115,7 @@ func (s *VerificationStore) Delete(code string) error {
 	return nil
 }
 
-// CreateUser creates a new verified user record
+// CreateUser creates a new verified user record (legacy method for backward compatibility)
 func (s *VerificationStore) CreateUser(discordID, email, name string) error {
 	query := `
 		INSERT INTO users (discord_id, email, name, verified_at)
@@ -129,10 +130,25 @@ func (s *VerificationStore) CreateUser(discordID, email, name string) error {
 	return nil
 }
 
+// CreateUserWithAzureID creates a new verified user record with Azure user ID
+func (s *VerificationStore) CreateUserWithAzureID(discordID, azureUserID, email, name string) error {
+	query := `
+		INSERT INTO users (discord_id, azure_user_id, email, name, verified_at)
+		VALUES (?, ?, ?, ?, ?)
+	`
+	
+	_, err := s.db.GetDB().Exec(query, discordID, azureUserID, email, name, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+	
+	return nil
+}
+
 // GetUser retrieves a user by Discord ID
 func (s *VerificationStore) GetUser(discordID string) (*User, bool) {
 	query := `
-		SELECT user_id, discord_id, email, name, verified_at, created_at
+		SELECT user_id, discord_id, COALESCE(azure_user_id, '') as azure_user_id, email, name, verified_at, created_at
 		FROM users
 		WHERE discord_id = ?
 	`
@@ -140,7 +156,7 @@ func (s *VerificationStore) GetUser(discordID string) (*User, bool) {
 	row := s.db.GetDB().QueryRow(query, discordID)
 	
 	var user User
-	err := row.Scan(&user.UserID, &user.DiscordID, &user.Email, &user.Name, &user.VerifiedAt, &user.CreatedAt)
+	err := row.Scan(&user.UserID, &user.DiscordID, &user.AzureUserID, &user.Email, &user.Name, &user.VerifiedAt, &user.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, false
@@ -151,6 +167,36 @@ func (s *VerificationStore) GetUser(discordID string) (*User, bool) {
 	}
 	
 	return &user, true
+}
+
+// GetUserByAzureID retrieves a user by Azure user ID
+func (s *VerificationStore) GetUserByAzureID(azureUserID string) (*User, bool) {
+	query := `
+		SELECT user_id, discord_id, azure_user_id, email, name, verified_at, created_at
+		FROM users
+		WHERE azure_user_id = ?
+	`
+	
+	row := s.db.GetDB().QueryRow(query, azureUserID)
+	
+	var user User
+	err := row.Scan(&user.UserID, &user.DiscordID, &user.AzureUserID, &user.Email, &user.Name, &user.VerifiedAt, &user.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, false
+		}
+		// Log error but return false
+		fmt.Printf("Error getting user by Azure ID: %v\n", err)
+		return nil, false
+	}
+	
+	return &user, true
+}
+
+// IsUserVerifiedByAzureID checks if a user is already verified by Azure ID
+func (s *VerificationStore) IsUserVerifiedByAzureID(azureUserID string) bool {
+	_, exists := s.GetUserByAzureID(azureUserID)
+	return exists
 }
 
 // IsUserVerified checks if a user is already verified
