@@ -1,27 +1,29 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"discord-sso-role/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
 )
 
 type OAuthHandler struct {
-	config      *models.Config
-	store       *models.VerificationStore
-	oauthConfig *oauth2.Config
+	config         *models.Config
+	store          *models.VerificationStore
+	oauthConfig    *oauth2.Config
+	discordHandler *DiscordHandler
 }
 
-func NewOAuthHandler(config *models.Config, store *models.VerificationStore) *OAuthHandler {
+func NewOAuthHandler(config *models.Config, store *models.VerificationStore, discordHandler *DiscordHandler) *OAuthHandler {
 	oauthConfig := &oauth2.Config{
 		ClientID:     config.MicrosoftClientID,
 		ClientSecret: config.MicrosoftClientSecret,
@@ -31,9 +33,10 @@ func NewOAuthHandler(config *models.Config, store *models.VerificationStore) *OA
 	}
 
 	return &OAuthHandler{
-		config:      config,
-		store:       store,
-		oauthConfig: oauthConfig,
+		config:         config,
+		store:          store,
+		oauthConfig:    oauthConfig,
+		discordHandler: discordHandler,
 	}
 }
 
@@ -84,12 +87,23 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
+	respContent, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Failed to read user info response", "error", err)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": "Failed to read user information",
+		})
+		return
+	}
+
+	log.Println(string(respContent))
+
 	var userInfo struct {
-		Email string `json:"mail"`
+		Email string `json:"email"`
 		Name  string `json:"displayName"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(respContent)).Decode(&userInfo); err != nil {
 		slog.Error("Failed to decode user info", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to parse user information",
@@ -97,26 +111,19 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Generate verification code
-	verificationCode := &models.VerificationCode{
-		Code:      uuid.New().String()[:8],
-		Email:     userInfo.Email,
-		DiscordID: state,
-		ExpiresAt: time.Now().Add(time.Duration(h.config.VerificationTTL) * time.Minute),
-	}
-
-	// Store verification code
-	if err := h.store.Store(verificationCode); err != nil {
-		slog.Error("Failed to store verification code", "error", err)
+	// Directly verify the user and assign the role
+	err = h.discordHandler.VerifyUserDirectly(state, userInfo.Email)
+	if err != nil {
+		slog.Error("Failed to verify user", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"error": "Failed to store verification code",
+			"error": err.Error(),
 		})
 		return
 	}
 
-	// Show success page with verification code
+	// Show success page
 	c.HTML(http.StatusOK, "success.html", gin.H{
-		"code":  verificationCode.Code,
-		"email": userInfo.Email,
+		"email":   userInfo.Email,
+		"message": "Your employee status has been verified! Check Discord for confirmation.",
 	})
 }

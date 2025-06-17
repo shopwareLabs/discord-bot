@@ -46,13 +46,12 @@ func main() {
 	store := models.NewVerificationStore(db)
 
 	// Initialize handlers
-	oauthHandler := handlers.NewOAuthHandler(config, store)
-
 	discordHandler, err := handlers.NewDiscordHandler(config, store)
 	if err != nil {
 		slog.Error("Failed to create Discord handler", "error", err)
 	}
 
+	oauthHandler := handlers.NewOAuthHandler(config, store, discordHandler)
 	webHandler := handlers.NewWebHandler(discordHandler)
 
 	// Start Discord bot
@@ -69,7 +68,6 @@ func main() {
 	router.GET("/", webHandler.Home)
 	router.GET("/employee/start", oauthHandler.StartAuth)
 	router.GET("/employee/callback", oauthHandler.Callback)
-	router.POST("/employee/verify", webHandler.VerifyCode)
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {

@@ -44,55 +44,29 @@
             color: #1a1a1a;
             margin-bottom: 1rem;
         }
-        .code-box {
-            background-color: #f8f9fa;
-            border: 2px dashed #5865F2;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1.5rem 0;
-        }
-        .code {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #5865F2;
-            letter-spacing: 0.2rem;
-            font-family: monospace;
-        }
         .email {
             color: #666;
             margin-bottom: 1.5rem;
         }
-        .instructions {
+        .message {
             background-color: #e7f3ff;
-            padding: 1rem;
-            border-radius: 4px;
+            padding: 1.5rem;
+            border-radius: 8px;
             margin-top: 1.5rem;
-            text-align: left;
-        }
-        .instructions h3 {
-            margin-top: 0;
             color: #004085;
         }
-        .instructions ol {
-            margin: 0.5rem 0;
-            padding-left: 1.5rem;
-        }
-        .instructions li {
-            margin-bottom: 0.5rem;
-            color: #004085;
-        }
-        button {
+        .discord-link {
+            display: inline-block;
             background-color: #5865F2;
             color: white;
-            border: none;
+            text-decoration: none;
             padding: 0.75rem 2rem;
             border-radius: 4px;
             font-size: 1rem;
-            cursor: pointer;
-            margin-top: 1rem;
+            margin-top: 1.5rem;
             transition: background-color 0.2s;
         }
-        button:hover {
+        .discord-link:hover {
             background-color: #4752C4;
         }
     </style>
@@ -100,38 +74,21 @@
 <body>
     <div class="container">
         <div class="success-icon"></div>
-        <h1>Authentication Successful!</h1>
+        <h1>Verification Complete!</h1>
         <p class="email">Authenticated as: <strong>{{.email}}</strong></p>
         
-        <div class="code-box">
-            <p style="margin: 0 0 0.5rem 0; color: #666;">Your verification code is:</p>
-            <div class="code" id="verificationCode">{{.code}}</div>
-            <button onclick="copyCode()">Copy Code</button>
+        <div class="message">
+            <p style="margin: 0 0 1rem 0;">
+                <strong>{{.message}}</strong>
+            </p>
+            <p style="margin: 0;">
+                You have been granted the employee role in Discord.
+            </p>
         </div>
         
-        <div class="instructions">
-            <h3>Next Steps:</h3>
-            <ol>
-                <li>Copy the verification code above</li>
-                <li>Go to the verification page: <a href="/" target="_blank">Open Verification Page</a></li>
-                <li>Enter the code to complete verification</li>
-                <li>Check Discord for confirmation</li>
-            </ol>
-        </div>
+        <a href="https://discord.com/channels/@me" class="discord-link" target="_blank">
+            Open Discord
+        </a>
     </div>
-
-    <script>
-        function copyCode() {
-            const code = document.getElementById('verificationCode').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                const button = event.target;
-                const originalText = button.textContent;
-                button.textContent = 'Copied!';
-                setTimeout(() => {
-                    button.textContent = originalText;
-                }, 2000);
-            });
-        }
-    </script>
 </body>
 </html>

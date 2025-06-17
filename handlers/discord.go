@@ -70,13 +70,12 @@ func (h *DiscordHandler) interactionCreate(s *discordgo.Session, i *discordgo.In
 }
 
 func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Check if user already has a pending verification
-	if existingCode, exists := h.store.GetByDiscordID(i.Member.User.ID); exists {
-		// Send ephemeral message with existing verification link
+	// Check if user is already verified
+	if h.store.IsUserVerified(i.Member.User.ID) {
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("You already have a pending verification. Your code is: **%s**\n\nPlease complete the verification process or wait for it to expire.", existingCode.Code),
+				Content: "You are already verified!",
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -93,13 +92,57 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Please click the following link to verify your employee status:\n%s\n\nThis link will expire in %d minutes.", verificationURL, h.config.VerificationTTL),
+			Content: fmt.Sprintf("Please click the following link to verify your employee status:\n%s", verificationURL),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 	if err != nil {
 		slog.Error("Failed to respond to interaction", "error", err)
 	}
+}
+
+// VerifyUserDirectly verifies a user directly with email and assigns the role
+func (h *DiscordHandler) VerifyUserDirectly(discordID, email string) error {
+	// Check if email is from allowed domain
+	if !strings.HasSuffix(email, "@shopware.com") {
+		return fmt.Errorf("email domain not allowed")
+	}
+
+	// Check if user is already verified
+	if h.store.IsUserVerified(discordID) {
+		return fmt.Errorf("user is already verified")
+	}
+
+	// Add role to user
+	err := h.session.GuildMemberRoleAdd(h.config.DiscordGuildID, discordID, h.config.DiscordRoleID)
+	if err != nil {
+		return fmt.Errorf("failed to add role: %v", err)
+	}
+
+	// Get user info from Discord to store name
+	user, err := h.session.User(discordID)
+	var userName string
+	if err != nil {
+		userName = "Unknown"
+		slog.Error("Failed to get Discord user info", "error", err)
+	} else {
+		userName = user.Username
+	}
+
+	// Create user record in database
+	if err := h.store.CreateUser(discordID, email, userName); err != nil {
+		slog.Error("Failed to create user record", "error", err)
+		// Don't return error here as the role was already assigned
+	}
+
+	// Send DM to user
+	channel, err := h.session.UserChannelCreate(discordID)
+	if err == nil {
+		_, _ = h.session.ChannelMessageSend(channel.ID, fmt.Sprintf("Congratulations! Your employee status has been verified. Email: %s", email))
+	}
+
+	slog.Info("User verified", "discord_id", discordID, "email", email)
+	return nil
 }
 
 // VerifyUser verifies a user with the provided code and assigns the role
