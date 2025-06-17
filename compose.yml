@@ -1,12 +1,10 @@
 services:
   discord-sso:
-    build: .
+    image: ghcr.io/shopwarelabs/discord-bot:latest
     ports:
       - "8080:8080"
     volumes:
       - discord-sso-data:/app/data
-    env_file:
-      - .env
     networks:
       - traefik
     labels:
