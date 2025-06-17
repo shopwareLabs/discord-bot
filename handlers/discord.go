@@ -81,7 +81,7 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 			},
 		})
 		if err != nil {
-			slog.Error("Failed to respond to interaction: %v", err)
+			slog.Error("Failed to respond to interaction", "error", err)
 		}
 		return
 	}
@@ -98,7 +98,7 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 		},
 	})
 	if err != nil {
-		slog.Error("Failed to respond to interaction: %v", err)
+		slog.Error("Failed to respond to interaction", "error", err)
 	}
 }
 
@@ -113,7 +113,7 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	// Check if email is from allowed domain (you can customize this)
 	if !strings.HasSuffix(vc.Email, "@shopware.com") {
 		if err := h.store.Delete(code); err != nil {
-			slog.Error("Failed to delete verification code: %v", err)
+			slog.Error("Failed to delete verification code", "error", err)
 		}
 		return fmt.Errorf("email domain not allowed")
 	}
@@ -121,7 +121,7 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	// Check if user is already verified
 	if h.store.IsUserVerified(vc.DiscordID) {
 		if err := h.store.Delete(code); err != nil {
-			slog.Error("Failed to delete verification code: %v", err)
+			slog.Error("Failed to delete verification code", "error", err)
 		}
 		return fmt.Errorf("user is already verified")
 	}
@@ -137,14 +137,14 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	var userName string
 	if err != nil {
 		userName = "Unknown"
-		slog.Error("Failed to get Discord user info: %v", err)
+		slog.Error("Failed to get Discord user info", "error", err)
 	} else {
 		userName = user.Username
 	}
 
 	// Create user record in database
 	if err := h.store.CreateUser(vc.DiscordID, vc.Email, userName); err != nil {
-		slog.Error("Failed to create user record: %v", err)
+		slog.Error("Failed to create user record", "error", err)
 		// Don't return error here as the role was already assigned
 	}
 
@@ -156,9 +156,9 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 
 	// Delete verification code after successful verification
 	if err := h.store.Delete(code); err != nil {
-		slog.Error("Failed to delete verification code: %v", err)
+		slog.Error("Failed to delete verification code", "error", err)
 	}
 
-	slog.Info("User %s verified with email %s", vc.DiscordID, vc.Email)
+	slog.Info("User verified", "discord_id", vc.DiscordID, "email", vc.Email)
 	return nil
 }

@@ -27,18 +27,18 @@ func main() {
 	// Validate required configuration
 	if config.MicrosoftClientID == "" || config.MicrosoftClientSecret == "" ||
 		config.DiscordToken == "" || config.DiscordGuildID == "" || config.DiscordRoleID == "" {
-		slog.Error("Missing required configuration. Please check your environment variables.")
+		slog.Error("Missing required configuration", "error", "Please check your environment variables")
 	}
 
 	// Ensure database directory exists
 	if err := os.MkdirAll(filepath.Dir(config.DatabasePath), 0755); err != nil {
-		slog.Error("Failed to create database directory: %v", err)
+		slog.Error("Failed to create database directory", "error", err)
 	}
 
 	// Initialize database
 	db, err := models.NewDatabase(config.DatabasePath)
 	if err != nil {
-		slog.Error("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database", "error", err)
 	}
 	defer db.Close()
 
@@ -50,14 +50,14 @@ func main() {
 
 	discordHandler, err := handlers.NewDiscordHandler(config, store)
 	if err != nil {
-		slog.Error("Failed to create Discord handler: %v", err)
+		slog.Error("Failed to create Discord handler", "error", err)
 	}
 
 	webHandler := handlers.NewWebHandler(discordHandler)
 
 	// Start Discord bot
 	if err := discordHandler.Start(); err != nil {
-		slog.Error("Failed to start Discord bot: %v", err)
+		slog.Error("Failed to start Discord bot", "error", err)
 	}
 	defer discordHandler.Stop()
 
@@ -102,7 +102,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("Server forced to shutdown: %v", err)
+		slog.Error("Server forced to shutdown", "error", err)
 	}
 
 	slog.Info("Server exited")

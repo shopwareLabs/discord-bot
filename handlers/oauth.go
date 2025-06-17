@@ -65,7 +65,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	ctx := context.Background()
 	token, err := h.oauthConfig.Exchange(ctx, code)
 	if err != nil {
-		slog.Error("Failed to exchange code for token: %v", err)
+		slog.Error("Failed to exchange code for token", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to authenticate with Microsoft",
 		})
@@ -76,7 +76,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	client := h.oauthConfig.Client(ctx, token)
 	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
 	if err != nil {
-		slog.Error("Failed to get user info: %v", err)
+		slog.Error("Failed to get user info", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to get user information",
 		})
@@ -90,7 +90,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		slog.Error("Failed to decode user info: %v", err)
+		slog.Error("Failed to decode user info", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to parse user information",
 		})
@@ -107,7 +107,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	// Store verification code
 	if err := h.store.Store(verificationCode); err != nil {
-		slog.Error("Failed to store verification code: %v", err)
+		slog.Error("Failed to store verification code", "error", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to store verification code",
 		})
