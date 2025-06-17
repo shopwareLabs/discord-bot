@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +12,6 @@ import (
 
 	"discord-sso-role/handlers"
 	"discord-sso-role/models"
-	"discord-sso-role/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -25,20 +25,20 @@ func main() {
 	config := models.LoadConfig()
 
 	// Validate required configuration
-	if config.MicrosoftClientID == "" || config.MicrosoftClientSecret == "" || 
+	if config.MicrosoftClientID == "" || config.MicrosoftClientSecret == "" ||
 		config.DiscordToken == "" || config.DiscordGuildID == "" || config.DiscordRoleID == "" {
-		utils.Logger.Fatal("Missing required configuration. Please check your environment variables.")
+		slog.Error("Missing required configuration. Please check your environment variables.")
 	}
 
 	// Ensure database directory exists
 	if err := os.MkdirAll(filepath.Dir(config.DatabasePath), 0755); err != nil {
-		utils.Logger.Fatalf("Failed to create database directory: %v", err)
+		slog.Error("Failed to create database directory: %v", err)
 	}
 
 	// Initialize database
 	db, err := models.NewDatabase(config.DatabasePath)
 	if err != nil {
-		utils.Logger.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
@@ -47,17 +47,17 @@ func main() {
 
 	// Initialize handlers
 	oauthHandler := handlers.NewOAuthHandler(config, store)
-	
+
 	discordHandler, err := handlers.NewDiscordHandler(config, store)
 	if err != nil {
-		utils.Logger.Fatalf("Failed to create Discord handler: %v", err)
+		slog.Error("Failed to create Discord handler: %v", err)
 	}
 
 	webHandler := handlers.NewWebHandler(discordHandler)
 
 	// Start Discord bot
 	if err := discordHandler.Start(); err != nil {
-		utils.Logger.Fatalf("Failed to start Discord bot: %v", err)
+		slog.Error("Failed to start Discord bot: %v", err)
 	}
 	defer discordHandler.Stop()
 
@@ -65,14 +65,11 @@ func main() {
 	router := gin.Default()
 	router.LoadHTMLGlob("templates/*")
 
-	// Static files (if any)
-	router.Static("/static", "./static")
-
 	// Routes
 	router.GET("/", webHandler.Home)
-	router.GET("/auth/start", oauthHandler.StartAuth)
-	router.GET("/auth/callback", oauthHandler.Callback)
-	router.POST("/verify", webHandler.VerifyCode)
+	router.GET("/employee/start", oauthHandler.StartAuth)
+	router.GET("/employee/callback", oauthHandler.Callback)
+	router.POST("/employee/verify", webHandler.VerifyCode)
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
@@ -87,9 +84,9 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		utils.Logger.Printf("Starting web server on port %s", config.Port)
+		slog.Info("Starting web server on port", "port", config.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			utils.Logger.Fatalf("Failed to start server: %v", err)
+			slog.Error("Failed to start server", "err", err)
 		}
 	}()
 
@@ -98,15 +95,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	utils.Logger.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		utils.Logger.Printf("Server forced to shutdown: %v", err)
+		slog.Error("Server forced to shutdown: %v", err)
 	}
 
-	utils.Logger.Println("Server exited")
+	slog.Info("Server exited")
 }

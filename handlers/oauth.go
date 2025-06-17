@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"discord-sso-role/models"
-	"discord-sso-role/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -26,7 +26,7 @@ func NewOAuthHandler(config *models.Config, store *models.VerificationStore) *OA
 		ClientID:     config.MicrosoftClientID,
 		ClientSecret: config.MicrosoftClientSecret,
 		RedirectURL:  config.MicrosoftRedirectURL,
-		Scopes:       []string{"openid", "email", "profile", "User.Read"},
+		Scopes:       []string{"openid", "email", "profile"},
 		Endpoint:     microsoft.AzureADEndpoint(config.MicrosoftTenantID),
 	}
 
@@ -53,7 +53,7 @@ func (h *OAuthHandler) StartAuth(c *gin.Context) {
 func (h *OAuthHandler) Callback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state") // Discord ID
-	
+
 	if code == "" {
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{
 			"error": "Authorization code not provided",
@@ -65,7 +65,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	ctx := context.Background()
 	token, err := h.oauthConfig.Exchange(ctx, code)
 	if err != nil {
-		utils.Logger.Printf("Failed to exchange code for token: %v", err)
+		slog.Error("Failed to exchange code for token: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to authenticate with Microsoft",
 		})
@@ -76,7 +76,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	client := h.oauthConfig.Client(ctx, token)
 	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
 	if err != nil {
-		utils.Logger.Printf("Failed to get user info: %v", err)
+		slog.Error("Failed to get user info: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to get user information",
 		})
@@ -90,7 +90,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		utils.Logger.Printf("Failed to decode user info: %v", err)
+		slog.Error("Failed to decode user info: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to parse user information",
 		})
@@ -107,7 +107,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	// Store verification code
 	if err := h.store.Store(verificationCode); err != nil {
-		utils.Logger.Printf("Failed to store verification code: %v", err)
+		slog.Error("Failed to store verification code: %v", err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to store verification code",
 		})

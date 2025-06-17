@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -12,29 +13,29 @@ type Config struct {
 	MicrosoftClientSecret string
 	MicrosoftRedirectURL  string
 	MicrosoftTenantID     string
-	
+
 	// Discord
-	DiscordToken      string
-	DiscordGuildID    string
-	DiscordRoleID     string
-	
+	DiscordToken   string
+	DiscordGuildID string
+	DiscordRoleID  string
+
 	// Server
-	Port              string
-	BaseURL           string
-	VerificationTTL   int // in minutes
-	
+	Port            string
+	BaseURL         string
+	VerificationTTL int // in minutes
+
 	// Database
-	DatabasePath      string
+	DatabasePath string
 }
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	ttl, _ := strconv.Atoi(getEnv("VERIFICATION_TTL", "15"))
-	
+
 	return &Config{
 		MicrosoftClientID:     getEnv("MICROSOFT_CLIENT_ID", ""),
 		MicrosoftClientSecret: getEnv("MICROSOFT_CLIENT_SECRET", ""),
-		MicrosoftRedirectURL:  getEnv("MICROSOFT_REDIRECT_URL", "http://localhost:8080/auth/callback"),
+		MicrosoftRedirectURL:  fmt.Sprintf("%s/employee/callback", getEnv("BASE_URL", "http://localhost:8080")),
 		MicrosoftTenantID:     getEnv("MICROSOFT_TENANT_ID", ""),
 		DiscordToken:          getEnv("DISCORD_TOKEN", ""),
 		DiscordGuildID:        getEnv("DISCORD_GUILD_ID", ""),

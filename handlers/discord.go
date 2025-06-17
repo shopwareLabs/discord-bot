@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"discord-sso-role/models"
-	"discord-sso-role/utils"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -50,7 +50,8 @@ func (h *DiscordHandler) Start() error {
 		return fmt.Errorf("cannot create slash command: %v", err)
 	}
 
-	utils.Logger.Println("Discord bot is now running")
+	slog.Info("Discord bot started",
+		"guild_id", h.config.DiscordGuildID)
 	return nil
 }
 
@@ -59,7 +60,7 @@ func (h *DiscordHandler) Stop() error {
 }
 
 func (h *DiscordHandler) ready(s *discordgo.Session, event *discordgo.Ready) {
-	utils.Logger.Printf("Discord bot logged in as %s", event.User.Username)
+	slog.Info("Discord bot logged in", "user", event.User.Username)
 }
 
 func (h *DiscordHandler) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -80,13 +81,13 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 			},
 		})
 		if err != nil {
-			utils.Logger.Printf("Failed to respond to interaction: %v", err)
+			slog.Error("Failed to respond to interaction: %v", err)
 		}
 		return
 	}
 
 	// Generate verification URL
-	verificationURL := fmt.Sprintf("%s/auth/start?state=%s", h.config.BaseURL, i.Member.User.ID)
+	verificationURL := fmt.Sprintf("%s/employee/start?state=%s", h.config.BaseURL, i.Member.User.ID)
 
 	// Send ephemeral message with verification link
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -97,7 +98,7 @@ func (h *DiscordHandler) handleVerifyCommand(s *discordgo.Session, i *discordgo.
 		},
 	})
 	if err != nil {
-		utils.Logger.Printf("Failed to respond to interaction: %v", err)
+		slog.Error("Failed to respond to interaction: %v", err)
 	}
 }
 
@@ -112,7 +113,7 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	// Check if email is from allowed domain (you can customize this)
 	if !strings.HasSuffix(vc.Email, "@shopware.com") {
 		if err := h.store.Delete(code); err != nil {
-			utils.Logger.Printf("Failed to delete verification code: %v", err)
+			slog.Error("Failed to delete verification code: %v", err)
 		}
 		return fmt.Errorf("email domain not allowed")
 	}
@@ -120,7 +121,7 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	// Check if user is already verified
 	if h.store.IsUserVerified(vc.DiscordID) {
 		if err := h.store.Delete(code); err != nil {
-			utils.Logger.Printf("Failed to delete verification code: %v", err)
+			slog.Error("Failed to delete verification code: %v", err)
 		}
 		return fmt.Errorf("user is already verified")
 	}
@@ -136,14 +137,14 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 	var userName string
 	if err != nil {
 		userName = "Unknown"
-		utils.Logger.Printf("Failed to get Discord user info: %v", err)
+		slog.Error("Failed to get Discord user info: %v", err)
 	} else {
 		userName = user.Username
 	}
 
 	// Create user record in database
 	if err := h.store.CreateUser(vc.DiscordID, vc.Email, userName); err != nil {
-		utils.Logger.Printf("Failed to create user record: %v", err)
+		slog.Error("Failed to create user record: %v", err)
 		// Don't return error here as the role was already assigned
 	}
 
@@ -155,9 +156,9 @@ func (h *DiscordHandler) VerifyUser(code string) error {
 
 	// Delete verification code after successful verification
 	if err := h.store.Delete(code); err != nil {
-		utils.Logger.Printf("Failed to delete verification code: %v", err)
+		slog.Error("Failed to delete verification code: %v", err)
 	}
 
-	utils.Logger.Printf("User %s verified with email %s", vc.DiscordID, vc.Email)
+	slog.Info("User %s verified with email %s", vc.DiscordID, vc.Email)
 	return nil
 }

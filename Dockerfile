@@ -1,8 +1,5 @@
-# Build stage
-FROM golang:1.21-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -31,9 +28,6 @@ COPY --from=builder /app/main .
 
 # Copy templates
 COPY --from=builder /app/templates ./templates
-
-# Create static directory
-RUN mkdir -p static
 
 # Expose port
 EXPOSE 8080
